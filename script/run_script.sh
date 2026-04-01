@@ -1,8 +1,8 @@
 #!/bin/bash --login
-#SBATCH -p gpuA                 # 队列/分区
+#SBATCH -p gpuL                 # 队列/分区
 #SBATCH -G 1                    # GPU 数量
 #SBATCH -n 12                   # CPU 核心数
-#SBATCH -t 2-0:00:00           # 最长运行时间 (天-时:分:秒)
+#SBATCH -t 1-0:00:00           # 最长运行时间 (天-时:分:秒)
 #SBATCH --mem=24G               # 内存
 #SBATCH -J MSV_Paper            # 任务名
 #SBATCH -o %x.%j.out            # 标准输出
@@ -25,19 +25,25 @@ TRAIN_CSV=${TRAIN_CSV:-$REPO_ROOT/scratch/Ball_counting_CNN/Tools_script/ball_co
 VAL_CSV=${VAL_CSV:-$REPO_ROOT/scratch/Ball_counting_CNN/Tools_script/ball_counting_dataset_val.csv}
 
 # 实验网格 (空格分隔，传给 run_all_experiments.py)
-SEEDS=${SEEDS:-"42 52 62 72 82"}
+SEEDS=${SEEDS:-"42 128 256"}
 
 # 训练参数
-TOTAL_EPOCHS=${TOTAL_EPOCHS:-50}
-BATCH_SIZE=${BATCH_SIZE:-32}
+TOTAL_EPOCHS=${TOTAL_EPOCHS:-500}
+BATCH_SIZE=${BATCH_SIZE:-16}
 SEQUENCE_LENGTH=${SEQUENCE_LENGTH:-11}
 NUM_WORKERS=${NUM_WORKERS:-4}
 LEARNING_RATE=${LEARNING_RATE:-1e-4}
 WEIGHT_DECAY=${WEIGHT_DECAY:-1e-5}
-SAVE_EVERY=${SAVE_EVERY:-10}
+SAVE_EVERY=${SAVE_EVERY:-20}
 RUN_TRAIN=${RUN_TRAIN:-1}
 RUN_EVAL=${RUN_EVAL:-1}
 RUN_VIZ=${RUN_VIZ:-1}
+
+# 内嵌 Python 通过 os.environ 读取这些变量，需显式 export
+export CONFIGS_DIR EXPERIMENTS_ROOT RESULTS_DIR
+export DATA_ROOT TRAIN_CSV VAL_CSV
+export TOTAL_EPOCHS BATCH_SIZE SEQUENCE_LENGTH NUM_WORKERS
+export LEARNING_RATE WEIGHT_DECAY SAVE_EVERY
 
 # -------- 环境初始化 --------
 echo "=== 作业信息 ==="
@@ -55,6 +61,7 @@ python -c 'import torch, platform; print("Torch:", torch.__version__, "CUDA:", t
 
 export WANDB_MODE="$WANDB_MODE"
 export PYTHONUNBUFFERED=1
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 # -------- 配置注入 --------
 cd "$PROJECT_ROOT"

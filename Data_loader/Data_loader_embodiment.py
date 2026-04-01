@@ -34,9 +34,16 @@ class BallCountingDataset(Dataset):
         
         self.csv_data = csv_data
         self.data_root = data_root
+        self.data_parent = os.path.dirname(self.data_root)
         self.sequence_length = sequence_length
         self.normalize_images = normalize_images
         self.custom_image_norm_stats = custom_image_norm_stats
+
+        # 如果 data_root 位于 .../scratch/... 下，则记录 scratch 之前的前缀，
+        # 以便解析 CSV 中像 scratch/... 这样的相对路径。
+        marker = "/scratch/"
+        marker_idx = self.data_root.find(marker)
+        self.repo_prefix = self.data_root[:marker_idx] if marker_idx != -1 else None
         
         # 设置图像变换
         self._setup_image_transforms()
@@ -102,7 +109,8 @@ class BallCountingDataset(Dataset):
     def _load_sequence_data(self, json_path):
         """加载并处理序列数据"""
         try:
-            with open(json_path, 'r') as f:
+            resolved_json_path = self._resolve_json_path(json_path)
+            with open(resolved_json_path, 'r') as f:
                 json_data = json.load(f)
             
             frames = json_data['frames']
@@ -186,6 +194,34 @@ class BallCountingDataset(Dataset):
                 'sequence_length': 1,
                 'ball_count': 0
             }
+
+    def _resolve_json_path(self, json_path):
+        """解析 CSV 中 json_path，兼容绝对路径与多种相对路径格式。"""
+        if os.path.isabs(json_path) and os.path.exists(json_path):
+            return json_path
+
+        candidates = []
+
+        # 1) 原样路径（相对当前工作目录）
+        candidates.append(json_path)
+
+        # 2) 相对 data_root
+        candidates.append(os.path.join(self.data_root, json_path))
+
+        # 3) 相对 data_root 上级（常见于 ball_data_collection 同级引用）
+        candidates.append(os.path.join(self.data_parent, json_path))
+
+        # 4) 如果路径以 scratch/ 开头，尝试拼接到仓库前缀
+        if self.repo_prefix and json_path.startswith("scratch/"):
+            candidates.append(os.path.join(self.repo_prefix, json_path))
+
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                return candidate
+
+        raise FileNotFoundError(
+            f"无法解析 json_path: {json_path}. 尝试路径: {candidates}"
+        )
 
 
 def get_ball_counting_data_loaders(train_csv_path, val_csv_path, data_root, 

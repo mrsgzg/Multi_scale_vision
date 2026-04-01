@@ -114,17 +114,18 @@ class PaperTrainer:
             if train:
                 self.optimizer.zero_grad()
 
-            outputs = self._compute_batch_outputs(batch)
-            labels = self._extract_targets(batch)
+            with torch.set_grad_enabled(train):
+                outputs = self._compute_batch_outputs(batch)
+                labels = self._extract_targets(batch)
 
-            logits = outputs["logits"]
-            loss = self.criterion(logits, labels)
+                logits = outputs["logits"]
+                loss = self.criterion(logits, labels)
 
-            if train:
-                loss.backward()
-                if self.grad_clip_norm and self.grad_clip_norm > 0:
-                    clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
-                self.optimizer.step()
+                if train:
+                    loss.backward()
+                    if self.grad_clip_norm and self.grad_clip_norm > 0:
+                        clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
+                    self.optimizer.step()
 
             total_loss += loss.item()
 
@@ -312,6 +313,14 @@ def run_training_once(config: Dict[str, Any]) -> Dict[str, Any]:
     }
     with open(os.path.join(save_dir, "run_summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
+
+    # 连续跑多个实验时释放显存，降低 OOM 风险。
+    del trainer
+    del model
+    del train_loader
+    del val_loader
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     return summary
 
