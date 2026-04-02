@@ -108,6 +108,8 @@ class PaperTrainer:
         all_preds = []
         all_labels = []
         all_step_acc = []
+        all_sequence_preds = []
+        all_sample_ids = []
 
         pbar = tqdm(loader, desc=f"{mode} {epoch}")
         for batch in pbar:
@@ -134,8 +136,13 @@ class PaperTrainer:
             all_labels.append(labels.detach().cpu().numpy())
 
             if "sequence_logits" in outputs:
+                seq_preds = outputs["sequence_logits"].argmax(dim=-1)
+                all_sequence_preds.append(seq_preds.detach().cpu().numpy())
                 step_acc = self._step_accuracy_vector(outputs["sequence_logits"], labels)
                 all_step_acc.append(step_acc.detach().cpu().numpy())
+
+            if "sample_id" in batch:
+                all_sample_ids.extend([str(x) for x in batch["sample_id"]])
 
             pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
@@ -165,6 +172,8 @@ class PaperTrainer:
         pred_pack = {
             "preds": all_preds_np,
             "labels": all_labels_np,
+            "sequence_preds": np.concatenate(all_sequence_preds) if all_sequence_preds else np.array([]),
+            "sample_ids": np.array(all_sample_ids, dtype=object) if all_sample_ids else np.array([], dtype=object),
         }
         return stats, pred_pack
 
@@ -213,6 +222,8 @@ class PaperTrainer:
                     "preds": val_pack["preds"],
                     "labels": val_pack["labels"],
                     "step_accuracy": val_stats.step_accuracy,
+                    "sequence_preds": val_pack["sequence_preds"],
+                    "sample_ids": val_pack["sample_ids"],
                 }
                 self._save_checkpoint(epoch, is_best=True)
 
@@ -229,6 +240,8 @@ class PaperTrainer:
                 preds=best_pack["preds"],
                 labels=best_pack["labels"],
                 step_accuracy=np.array(best_pack["step_accuracy"], dtype=np.float32),
+                sequence_preds=best_pack["sequence_preds"],
+                sample_ids=best_pack["sample_ids"],
             )
 
         final_metrics = history[-1]
