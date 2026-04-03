@@ -1,174 +1,71 @@
 # Multi_scale_vision
 
-Paper-oriented experiment guide for embodied counting with multimodal sequence models.
+This project studies embodied counting with multimodal sequential learning.
+The core question is: how should visual observations and robot joint signals be integrated over time so that a model learns counting more efficiently and robustly?
 
-This README is written for one goal: run all core experiments once, then directly obtain the tables/figures needed in a paper.
+## Project Overview
 
-## 1. Research Question
+We compare five model families, from single-modality baselines to multimodal fusion strategies:
 
-We test whether multimodal temporal interaction improves counting performance.
+1. E0 Joint-only
+2. E1 Visual-only
+3. E2 Early fusion
+4. E3 Late fusion
+5. E4 Stepwise fusion (proposed)
 
-Main logic:
-1. Are single modalities useful? (`joint_only`, `visual_only`)
-2. Is multimodal better than strongest single modality? (`early_fusion`)
-3. Is dual-stream temporal modeling better than single-stream fusion? (`late_fusion` vs `early_fusion`)
-4. Is stepwise fusion better than late fusion? (`stepwise_fusion` vs `late_fusion`)
+Rather than focusing only on final converged scores, this project emphasizes learning dynamics: convergence speed, intermediate-epoch performance, and temporal prediction behavior.
 
-## 2. Main Experiment Matrix (must-run)
+## Figure 1: Experimental Setup
 
-| ID | Model | Input | Temporal Structure | Fusion | Purpose |
-|---|---|---|---|---|---|
-| E0 | `joint_only` | joints | single joint LSTM | none | joint signal standalone predictive power |
-| E1 | `visual_only` | images | single visual LSTM | none | visual-only baseline |
-| E2 | `early_fusion_single_stream` | images + joints | single LSTM | concat before LSTM | standard multimodal baseline |
-| E3 | `dual_stream_late_fusion` | images + joints | visual LSTM + joint LSTM | fuse at final step | value of dual-stream temporal modeling |
-| E4 | `dual_stream_stepwise_fusion` | images + joints | visual LSTM + joint LSTM | fuse at every step | proposed method |
+![Experimental setup and general representation](setup.png)
 
-## 3. Fixed Training Setup (for fair comparison)
+This figure presents the embodied data-collection setup and a general view of the task pipeline.
 
-Use exactly the same setup for E0-E4 except model architecture.
+## Figure 2: Model Architecture Comparison
 
-- Data loader: `Data_loader/Data_loader_embodiment.py`
-- Input image mode: RGB
-- Input size: 224 x 224
-- Sequence length: 11
-- Joint dimension: 2
-- Hidden dimension: 256
-- LSTM layers: 2
-- Batch size: 16
-- Optimizer: Adam
-- Learning rate: 1e-4
-- Weight decay: 1e-5
-- Scheduler: CosineAnnealingLR
-- Epochs: 50 (or 100, choose one and keep fixed)
-- Seeds: 42, 52, 62, 72, 82
+![Comparison of model architectures (E0-E4)](models.svg)
 
-## 4. Metrics (paper report)
+This figure compares the five model designs and highlights the difference between early/late/stepwise multimodal interaction.
 
-Primary metrics:
-1. `Final Accuracy` (main metric)
-2. `Macro-F1`
-3. `Balanced Accuracy`
+## Main Research Message
 
-Secondary metrics:
-1. `Validation CE Loss`
-2. `Params`
-3. `Epoch Time` (or Throughput)
+The experiments support a clear trend:
 
-Report as mean +/- std across seeds.
+1. Multimodal models outperform single-modality baselines during training.
+2. Dual-stream temporal modeling improves representation quality.
+3. Stepwise fusion shows a stronger early-to-mid training advantage, even when several models become close at convergence.
 
-## 5. Figures for Paper
+In short, temporal structure of fusion matters for optimization and practical learnability.
 
-Required figures:
-1. Final Accuracy bar plot (E0-E4)
-2. Macro-F1 bar plot (E0-E4)
-3. Accuracy-over-time curve (E2, E3, E4)
-4. Confusion Matrix for E1 (`visual_only`)
-5. Confusion Matrix for E4 (`stepwise_fusion`)
+## Repository at a Glance
 
-Optional but recommended:
-1. UMAP/t-SNE of final hidden state (E1 vs E4)
-2. Stability plot (last-3-step prediction consistency for E2/E3/E4)
+- `trainer.py`: training pipeline
+- `evaluate.py`: aggregate experiment metrics
+- `visualize_results.py`: paper figures from aggregated outputs
+- `visualize_checkpoint_samples.py`: epoch-based trajectory and sample analysis
+- `summarize_epoch_metrics.py`: fixed-epoch metric summary
+- `generate_paper_figures.py`: one-shot regeneration for paper tables/figures
 
-## 6. Output Files Required by Paper
+## Quick Start
 
-After experiments, you should have:
-
-1. `results/metrics_summary.csv`
-2. `results/main_table.csv`
-3. `results/final_accuracy_bar.png`
-4. `results/macro_f1_bar.png`
-5. `results/accuracy_over_time.png`
-6. `results/cm_visual_only.png`
-7. `results/cm_stepwise_fusion.png`
-8. `results/run_manifest.json` (all runs, seeds, checkpoints, commit hash)
-
-## 7. Recommended Project Structure
-
-```text
-Multi_scale_vision/
-├── Data_loader/
-│   └── Data_loader_embodiment.py
-├── Models/
-│   ├── Model_alexnet_embodiment.py
-│   └── baselines.py
-├── trainer.py
-├── evaluate.py
-├── visualize_results.py
-├── configs/
-│   ├── exp_joint_only.json
-│   ├── exp_visual_only.json
-│   ├── exp_early_fusion.json
-│   ├── exp_late_fusion.json
-│   └── exp_stepwise_fusion.json
-├── experiments/
-│   ├── joint_only/
-│   ├── visual_only/
-│   ├── early_fusion/
-│   ├── late_fusion/
-│   └── stepwise_fusion/
-└── results/
-```
-
-Notes:
-- `Model_alexnet_embodiment.py` currently contains the stepwise-fusion model.
-- `Models/baselines.py` contains E0-E3 baseline implementations.
-
-## 8. Execution Plan (single full pass)
-
-Step 1: Train all runs
-1. For each experiment E0-E4
-2. For each seed in [42, 52, 62, 72, 82]
-3. Save checkpoint + history + validation predictions
-
-Step 2: Evaluate all runs
-1. Compute Final Accuracy, Macro-F1, Balanced Accuracy, CE Loss
-2. Aggregate mean/std by experiment
-3. Save `results/main_table.csv` and `results/metrics_summary.csv`
-
-Step 3: Produce figures
-1. Generate required figures listed in Section 5
-2. Export high-resolution PNG (>=300 dpi if used in paper)
-
-Step 4: Reproducibility package
-1. Save run manifest with seed, config, timestamp, checkpoint path, git commit
-2. Ensure all paper figures are generated from files in `results/`
-
-## 8.1 Commands
-
-Run all experiments (E0-E4 x seeds):
+Run a full paper-oriented regeneration (from existing experiment outputs):
 
 ```bash
-python run_all_experiments.py --configs_dir ./configs --seeds 42 52 62 72 82
+python generate_paper_figures.py --experiments_root ./experiments --results_dir ./results
 ```
 
-Aggregate metrics and generate paper tables:
+Or submit on cluster:
 
 ```bash
-python evaluate.py --experiments_root ./experiments --results_dir ./results
+sbatch script/run_generate_paper_figures.sh
 ```
 
-Generate paper figures:
+## Outputs
 
-```bash
-python visualize_results.py --experiments_root ./experiments --results_dir ./results
-```
+Generated artifacts are saved in `results/`, including:
 
-## 9. Main Table Template
+- aggregated tables (e.g., `main_table.csv`, `epoch_metrics_summary.csv`)
+- comparison plots and learning curves
+- epoch-based confusion matrices and trajectory visualizations
 
-| Model | Final Acc | Macro-F1 | Balanced Acc | Val CE Loss | Params |
-|---|---:|---:|---:|---:|---:|
-| E0 Joint-only |  |  |  |  |  |
-| E1 Visual-only |  |  |  |  |  |
-| E2 Early-fusion |  |  |  |  |  |
-| E3 Late-fusion |  |  |  |  |  |
-| E4 Stepwise-fusion |  |  |  |  |  |
-
-## 10. Expected Conclusion Pattern
-
-Target pattern to support the paper claim:
-1. `E2 > max(E0, E1)`
-2. `E3 > E2`
-3. `E4 > E3`
-
-If this holds consistently across seeds, your main claim is strongly supported.
+These files are directly used in the paper.
